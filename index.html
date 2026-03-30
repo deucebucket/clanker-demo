@@ -250,11 +250,11 @@ function readDim(val,dim){
 
 // --- CHARACTERS + PERSISTENT MEMORY ---
 var CHARACTERS=[
-  {id:'boy',label:'Boy',color:'#5b9bd5'},
-  {id:'girl',label:'Girl',color:'#d5855b'},
-  {id:'friend',label:'Friend',color:'#66bb6a'},
-  {id:'parent',label:'Parent',color:'#ab47bc'},
-  {id:'stranger',label:'Stranger',color:'#78909c'},
+  {id:'boy',label:'Boy',color:'#5b9bd5',skin:[185,145,120],hair:'#3a2a1a',hairStyle:'short',shirt:'#4a7ab5',shirtStyle:'tee'},
+  {id:'girl',label:'Girl',color:'#d5855b',skin:[210,175,150],hair:'#2a1a0a',hairStyle:'long',shirt:'#b54a6a',shirtStyle:'tank'},
+  {id:'friend',label:'Friend',color:'#66bb6a',skin:[140,100,70],hair:'#1a1a1a',hairStyle:'fade',shirt:'#4ab566',shirtStyle:'hoodie'},
+  {id:'parent',label:'Parent',color:'#ab47bc',skin:[200,165,135],hair:'#666666',hairStyle:'parted',shirt:'#555555',shirtStyle:'collared'},
+  {id:'stranger',label:'Stranger',color:'#78909c',skin:[220,195,170],hair:'#8B4513',hairStyle:'messy',shirt:'#333333',shirtStyle:'tee'},
 ];
 var charA='boy',charB='girl';
 
@@ -399,7 +399,8 @@ function getPosture(v,a,d,u,g){
   return p;
 }
 
-function updateRag(rag,st){
+function updateRag(rag,st,phaseOffset){
+  phaseOffset=phaseOffset||0;
   var ease=0.03,tgt=getPosture(st.cur.v,st.cur.a,st.cur.d,st.cur.u,st.cur.g);
   var jit=(st.cur.a/255)*5;
   for(var i=0;i<rag.pts.length;i++){
@@ -408,7 +409,8 @@ function updateRag(rag,st){
     rag.pts[i][0]+=vx+(tgt[i][0]-rag.pts[i][0]+(Math.random()-0.5)*jit)*ease;
     rag.pts[i][1]+=vy+(tgt[i][1]-rag.pts[i][1]+(Math.random()-0.5)*jit)*ease+0.2;
   }
-  var sw=Math.sin(time*0.7)*2,br=Math.sin(time*1.4)*1.2;
+  var t=time+phaseOffset;
+  var sw=Math.sin(t*0.7)*2,br=Math.sin(t*1.4)*1.2;
   rag.pts[0][0]+=sw*0.2;rag.pts[2][1]+=br*0.2;rag.pts[3][1]+=br*0.2;
   rag.pts[6][0]+=sw*0.4;rag.pts[7][0]+=sw*0.4;
   for(var it=0;it<5;it++){
@@ -425,14 +427,14 @@ function updateRag(rag,st){
   }
 }
 
-function drawRag(ctx,rag,st,pulse,flipped){
+function drawRag(ctx,rag,st,pulse,flipped,charConf){
   var v=st.cur.v,a=st.cur.a,d=st.cur.d,u=st.cur.u,g=st.cur.g;
   var col=valenceColor(v);
   var pts=rag.pts;
-  var sR=210,sG=180,sB=160;
-  if(v<100){sR=Math.min(230,sR+20);sG=Math.max(140,sG-20);sB=Math.max(130,sB-15)}
-  else if(v>170){sR=Math.max(190,sR-10);sG=Math.min(200,sG+10);sB=Math.min(180,sB+10)}
-  var skin='rgb('+sR+','+sG+','+sB+')',skinD='rgb('+(sR-30)+','+(sG-25)+','+(sB-20)+')';
+  var sR=charConf?charConf.skin[0]:210,sG=charConf?charConf.skin[1]:180,sB=charConf?charConf.skin[2]:160;
+  if(v<100){sR=Math.min(sR+20,255);sG=Math.max(sG-20,0);sB=Math.max(sB-15,0)}
+  else if(v>170){sR=Math.max(sR-10,0);sG=Math.min(sG+10,255);sB=Math.min(sB+10,255)}
+  var skin='rgb('+sR+','+sG+','+sB+')',skinD='rgb('+Math.max(0,sR-30)+','+Math.max(0,sG-25)+','+Math.max(0,sB-20)+')';
 
   // Flip B to face A
   if(flipped){ctx.save();ctx.translate(320,0);ctx.scale(-1,1);}
@@ -447,7 +449,7 @@ function drawRag(ctx,rag,st,pulse,flipped){
     ctx.fillStyle=gr;ctx.fillRect(0,0,320,340);
   }
 
-  // Body
+  // Body (limbs)
   ctx.lineCap='round';
   var segs=[[1,8],[8,9],[8,10],[9,11],[10,12],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7]];
   for(var i=0;i<segs.length;i++){
@@ -455,6 +457,53 @@ function drawRag(ctx,rag,st,pulse,flipped){
     ctx.strokeStyle=skinD;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(pts[sa][0],pts[sa][1]);ctx.lineTo(pts[sb][0],pts[sb][1]);ctx.stroke();
     ctx.strokeStyle=skin;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pts[sa][0],pts[sa][1]);ctx.lineTo(pts[sb][0],pts[sb][1]);ctx.stroke();
   }
+
+  // Clothing (drawn over torso/arms, under head)
+  if(charConf){
+    var shirtCol=charConf.shirt;
+    var ss=charConf.shirtStyle;
+    ctx.fillStyle=shirtCol;ctx.strokeStyle=shirtCol;ctx.lineWidth=1;
+    // Torso fill -- quad from shoulders to hips
+    ctx.beginPath();
+    ctx.moveTo(pts[2][0],pts[2][1]);ctx.lineTo(pts[3][0],pts[3][1]);
+    ctx.lineTo(pts[8][0]+8,pts[8][1]);ctx.lineTo(pts[8][0]-8,pts[8][1]);
+    ctx.closePath();ctx.fill();
+    // Shirt variations
+    if(ss==='tee'){
+      // Short sleeves -- thick lines from shoulders to elbows
+      ctx.strokeStyle=shirtCol;ctx.lineWidth=6;
+      ctx.beginPath();ctx.moveTo(pts[2][0],pts[2][1]);ctx.lineTo(pts[4][0],pts[4][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[3][0],pts[3][1]);ctx.lineTo(pts[5][0],pts[5][1]);ctx.stroke();
+    } else if(ss==='tank'){
+      // Straps at shoulders
+      ctx.lineWidth=4;ctx.strokeStyle=shirtCol;
+      ctx.beginPath();ctx.moveTo(pts[1][0]-4,pts[1][1]);ctx.lineTo(pts[2][0]+4,pts[2][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[1][0]+4,pts[1][1]);ctx.lineTo(pts[3][0]-4,pts[3][1]);ctx.stroke();
+    } else if(ss==='hoodie'){
+      // Wider torso + sleeves all the way to wrists
+      ctx.beginPath();
+      ctx.moveTo(pts[2][0]-4,pts[2][1]);ctx.lineTo(pts[3][0]+4,pts[3][1]);
+      ctx.lineTo(pts[8][0]+12,pts[8][1]);ctx.lineTo(pts[8][0]-12,pts[8][1]);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle=shirtCol;ctx.lineWidth=6;
+      ctx.beginPath();ctx.moveTo(pts[2][0],pts[2][1]);ctx.lineTo(pts[4][0],pts[4][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[3][0],pts[3][1]);ctx.lineTo(pts[5][0],pts[5][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[4][0],pts[4][1]);ctx.lineTo(pts[6][0],pts[6][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[5][0],pts[5][1]);ctx.lineTo(pts[7][0],pts[7][1]);ctx.stroke();
+      // Hood bump behind head
+      var hx0=pts[0][0],hy0=pts[0][1];
+      ctx.fillStyle=shirtCol;ctx.beginPath();ctx.arc(hx0,hy0-2,22,Math.PI*0.8,Math.PI*0.2,true);ctx.fill();
+    } else if(ss==='collared'){
+      // Like tee + collar detail
+      ctx.strokeStyle=shirtCol;ctx.lineWidth=6;
+      ctx.beginPath();ctx.moveTo(pts[2][0],pts[2][1]);ctx.lineTo(pts[4][0],pts[4][1]);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[3][0],pts[3][1]);ctx.lineTo(pts[5][0],pts[5][1]);ctx.stroke();
+      // V-collar
+      ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(pts[1][0]-6,pts[1][1]-2);ctx.lineTo(pts[1][0],pts[1][1]+8);ctx.lineTo(pts[1][0]+6,pts[1][1]-2);ctx.stroke();
+    }
+  }
+
   // Neck
   ctx.strokeStyle=skin;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]+14);ctx.lineTo(pts[1][0],pts[1][1]);ctx.stroke();
 
@@ -463,6 +512,50 @@ function drawRag(ctx,rag,st,pulse,flipped){
   ctx.fillStyle='rgba(0,0,0,0.08)';ctx.beginPath();ctx.arc(hx+1,hy+1,hr,0,Math.PI*2);ctx.fill();
   ctx.fillStyle=skin;ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle=skinD;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.stroke();
+
+  // Hair
+  if(charConf){
+    var hairCol=charConf.hair;
+    var hs=charConf.hairStyle;
+    ctx.fillStyle=hairCol;ctx.strokeStyle=hairCol;ctx.lineWidth=2;
+    if(hs==='short'){
+      // Small arc on top of head
+      ctx.beginPath();ctx.arc(hx,hy-4,hr+1,Math.PI*1.15,Math.PI*1.85,true);ctx.fill();
+    } else if(hs==='long'){
+      // Hair cap on top + flowing strands down past shoulders
+      ctx.beginPath();ctx.arc(hx,hy-2,hr+2,Math.PI*1.0,Math.PI*2.0,true);ctx.fill();
+      // Flowing sides
+      ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(hx-hr-1,hy);ctx.quadraticCurveTo(hx-hr-3,hy+25,hx-hr+2,hy+40);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(hx+hr+1,hy);ctx.quadraticCurveTo(hx+hr+3,hy+25,hx+hr-2,hy+40);ctx.stroke();
+      // Middle strand
+      ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(hx-hr,hy+5);ctx.quadraticCurveTo(hx-hr-2,hy+20,hx-hr+4,hy+35);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(hx+hr,hy+5);ctx.quadraticCurveTo(hx+hr+2,hy+20,hx+hr-4,hy+35);ctx.stroke();
+    } else if(hs==='fade'){
+      // Tight sides, taller on top
+      ctx.beginPath();ctx.arc(hx,hy-6,hr-2,Math.PI*1.1,Math.PI*1.9,true);ctx.fill();
+      // Flat top portion
+      ctx.fillRect(hx-10,hy-hr-5,20,8);
+    } else if(hs==='parted'){
+      // Side part -- hair on top with part line
+      ctx.beginPath();ctx.arc(hx+2,hy-4,hr,Math.PI*1.1,Math.PI*1.95,true);ctx.fill();
+      // Part line
+      ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(hx-5,hy-hr-1);ctx.lineTo(hx-3,hy-hr+8);ctx.stroke();
+    } else if(hs==='messy'){
+      // Irregular spiky lines on top
+      ctx.lineWidth=2.5;ctx.strokeStyle=hairCol;
+      var spikes=[[-10,-4,-12,-18],[-5,-6,-3,-20],[0,-5,2,-22],[5,-6,8,-19],[10,-4,14,-16],[-7,-5,-10,-14],[7,-5,12,-13]];
+      for(var si=0;si<spikes.length;si++){
+        var sk=spikes[si];
+        ctx.beginPath();ctx.moveTo(hx+sk[0],hy+sk[1]);ctx.lineTo(hx+sk[2],hy+sk[3]);ctx.stroke();
+      }
+      // Base cap
+      ctx.fillStyle=hairCol;
+      ctx.beginPath();ctx.arc(hx,hy-4,hr,Math.PI*1.1,Math.PI*1.9,true);ctx.fill();
+    }
+  }
 
   // Eye whites
   var eyeY=hy-3,sp=6;
@@ -678,10 +771,12 @@ function frame(){
     stateA.cur[k]=lerp(stateA.cur[k],stateA.tgt[k],sp);
     stateB.cur[k]=lerp(stateB.cur[k],stateB.tgt[k],sp);
   });
-  updateRag(ragA,stateA);updateRag(ragB,stateB);
+  updateRag(ragA,stateA,0);updateRag(ragB,stateB,2.3);
   ctxA.clearRect(0,0,320,340);ctxB.clearRect(0,0,320,340);
-  pulseA=drawRag(ctxA,ragA,stateA,pulseA,false);
-  pulseB=drawRag(ctxB,ragB,stateB,pulseB,true);
+  var confA=CHARACTERS.find(function(c){return c.id===charA})||CHARACTERS[0];
+  var confB=CHARACTERS.find(function(c){return c.id===charB})||CHARACTERS[1];
+  pulseA=drawRag(ctxA,ragA,stateA,pulseA,false,confA);
+  pulseB=drawRag(ctxB,ragB,stateB,pulseB,true,confB);
   // Draw speech bubbles for last messages
   if(convoLog.length>0){
     var last=convoLog[convoLog.length-1];
