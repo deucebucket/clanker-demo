@@ -325,6 +325,14 @@ function drawRagdoll(ctx){
   var v=current.v,a=current.a,d=current.d,u=current.u,g=current.g;
   var col=valenceColor(v);
 
+  // Skin tone -- warm neutral that tints with emotion
+  var skinR=210,skinG=180,skinB=160;
+  // Tint skin slightly with valence
+  if(v<100){skinR=Math.min(230,skinR+20);skinG=Math.max(140,skinG-20);skinB=Math.max(130,skinB-15)}
+  else if(v>170){skinR=Math.max(190,skinR-10);skinG=Math.min(200,skinG+10);skinB=Math.min(180,skinB+10)}
+  var skin='rgb('+skinR+','+skinG+','+skinB+')';
+  var skinDark='rgb('+(skinR-30)+','+(skinG-25)+','+(skinB-20)+')';
+
   // Urgency glow
   if(u>5){
     var spd=0.5+(u/255)*8;
@@ -338,132 +346,167 @@ function drawRagdoll(ctx){
     ctx.fillRect(0,0,400,420);
   }
 
-  // Body sticks
-  ctx.strokeStyle=col; ctx.lineWidth=3; ctx.lineCap='round';
-  var bodySticks=[[0,1],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7],[1,8],[8,9],[8,10],[9,11],[10,12]];
-  for(var bi=0;bi<bodySticks.length;bi++){
-    ctx.beginPath();ctx.moveTo(pts[bodySticks[bi][0]][0],pts[bodySticks[bi][0]][1]);
-    ctx.lineTo(pts[bodySticks[bi][1]][0],pts[bodySticks[bi][1]][1]);ctx.stroke();
+  // Body limbs with thickness
+  ctx.lineCap='round';ctx.lineJoin='round';
+  var bodySegs=[[1,8],[8,9],[8,10],[9,11],[10,12],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7]];
+  var limbWidths={0:6,1:5,2:5,3:4,4:4,5:5,6:5,7:4,8:4,9:3,10:3};
+  for(var bi=0;bi<bodySegs.length;bi++){
+    var sa=bodySegs[bi][0],sb=bodySegs[bi][1];
+    ctx.strokeStyle=skinDark;ctx.lineWidth=(limbWidths[bi]||4)+1;
+    ctx.beginPath();ctx.moveTo(pts[sa][0],pts[sa][1]);ctx.lineTo(pts[sb][0],pts[sb][1]);ctx.stroke();
+    ctx.strokeStyle=skin;ctx.lineWidth=limbWidths[bi]||4;
+    ctx.beginPath();ctx.moveTo(pts[sa][0],pts[sa][1]);ctx.lineTo(pts[sb][0],pts[sb][1]);ctx.stroke();
   }
 
-  // Head circle
-  var hx=pts[0][0],hy=pts[0][1],hr=20;
-  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);
-  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();
+  // Neck
+  ctx.strokeStyle=skin;ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]+16);ctx.lineTo(pts[1][0],pts[1][1]);ctx.stroke();
+
+  // Head -- filled circle with skin
+  var hx=pts[0][0],hy=pts[0][1],hr=22;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.1)';
+  ctx.beginPath();ctx.arc(hx+1,hy+2,hr,0,Math.PI*2);ctx.fill();
+  // Head fill
+  ctx.fillStyle=skin;
+  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.fill();
+  // Subtle outline
+  ctx.strokeStyle=skinDark;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.stroke();
 
   // --- EXPRESSIVE FACE ---
-  var eyeY=hy-4,sp=7,esz=a>180?4:2.5;
+  var eyeY=hy-4,sp=8,esz=a>180?4.5:3;
 
-  // Eyebrows (express D and V)
-  ctx.strokeStyle=col;ctx.lineWidth=2;
-  var browY=eyeY-8;
-  var browLen=5;
+  // Eye whites
+  ctx.fillStyle='#f5f5f0';
+  ctx.beginPath();ctx.ellipse(hx-sp,eyeY,5,4,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(hx+sp,eyeY,5,4,0,0,Math.PI*2);ctx.fill();
+
+  // Eyebrows
+  ctx.strokeStyle='rgb('+(skinR-80)+','+(skinG-70)+','+(skinB-60)+')';
+  ctx.lineWidth=2.5;
+  var browY=eyeY-9;var browLen=6;
   if(v<70){
-    // Anguished: inner brows up (worried)
-    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY);ctx.lineTo(hx-sp+browLen,browY-5);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY);ctx.lineTo(hx+sp-browLen,browY-5);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY+1);ctx.lineTo(hx-sp+browLen,browY-5);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY+1);ctx.lineTo(hx+sp-browLen,browY-5);ctx.stroke();
   } else if(v<115){
-    // Sad: slightly drooped
-    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-2);ctx.lineTo(hx-sp+browLen,browY+1);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-2);ctx.lineTo(hx+sp-browLen,browY+1);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-1);ctx.lineTo(hx-sp+browLen,browY+2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-1);ctx.lineTo(hx+sp-browLen,browY+2);ctx.stroke();
   } else if(d>180){
-    // Commanding: angry V brows
-    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-3);ctx.lineTo(hx-sp+browLen,browY+2);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-3);ctx.lineTo(hx+sp-browLen,browY+2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-2);ctx.lineTo(hx-sp+browLen,browY+3);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-2);ctx.lineTo(hx+sp-browLen,browY+3);ctx.stroke();
   } else if(v>170){
-    // Joyful: raised arches
-    ctx.beginPath();
-    ctx.moveTo(hx-sp-browLen,browY);ctx.quadraticCurveTo(hx-sp,browY-5,hx-sp+browLen,browY);ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(hx+sp-browLen,browY);ctx.quadraticCurveTo(hx+sp,browY-5,hx+sp+browLen,browY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY+1);ctx.quadraticCurveTo(hx-sp,browY-5,hx-sp+browLen,browY+1);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp-browLen,browY+1);ctx.quadraticCurveTo(hx+sp,browY-5,hx+sp+browLen,browY+1);ctx.stroke();
   } else {
-    // Neutral: flat
     ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY);ctx.lineTo(hx-sp+browLen,browY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(hx+sp-browLen,browY);ctx.lineTo(hx+sp+browLen,browY);ctx.stroke();
   }
 
-  // Eyes
+  // Pupils/irises
   if(v<50){
-    // Shattered: X eyes
-    ctx.lineWidth=1.8;var s=3.5;
-    var eyes=[hx-sp,hx+sp];
-    for(var ei=0;ei<eyes.length;ei++){
-      var ex=eyes[ei];
+    // X eyes
+    ctx.strokeStyle='#333';ctx.lineWidth=2;var s=3;
+    [hx-sp,hx+sp].forEach(function(ex){
       ctx.beginPath();ctx.moveTo(ex-s,eyeY-s);ctx.lineTo(ex+s,eyeY+s);ctx.stroke();
       ctx.beginPath();ctx.moveTo(ex+s,eyeY-s);ctx.lineTo(ex-s,eyeY+s);ctx.stroke();
-    }
+    });
   } else if(v<90){
-    // Distressed: small dots, looking down
-    ctx.fillStyle=col;
-    ctx.beginPath();ctx.arc(hx-sp,eyeY+2,1.8,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(hx+sp,eyeY+2,1.8,0,Math.PI*2);ctx.fill();
+    // Small pupils, looking down
+    ctx.fillStyle='#333';
+    ctx.beginPath();ctx.arc(hx-sp,eyeY+1.5,2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+sp,eyeY+1.5,2,0,Math.PI*2);ctx.fill();
   } else if(v>180){
-    // Elated: half-circle happy eyes (squinting from smile)
-    ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(hx-sp,eyeY+1,3,Math.PI,0);ctx.stroke();
-    ctx.beginPath();ctx.arc(hx+sp,eyeY+1,3,Math.PI,0);ctx.stroke();
+    // Happy squint -- arc eyes
+    ctx.strokeStyle='#333';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(hx-sp,eyeY+1,4,Math.PI,0);ctx.stroke();
+    ctx.beginPath();ctx.arc(hx+sp,eyeY+1,4,Math.PI,0);ctx.stroke();
   } else {
-    // Normal: dots with size based on arousal
-    ctx.fillStyle=col;
-    var ey=d<60?2:0;
+    // Normal pupils with iris
+    var ey=d<60?1.5:0;
+    // Iris
+    ctx.fillStyle='rgb(90,65,40)';
     ctx.beginPath();ctx.arc(hx-sp,eyeY+ey,esz,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(hx+sp,eyeY+ey,esz,0,Math.PI*2);ctx.fill();
+    // Pupil
+    ctx.fillStyle='#1a1a1a';
+    ctx.beginPath();ctx.arc(hx-sp,eyeY+ey,esz*0.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+sp,eyeY+ey,esz*0.5,0,Math.PI*2);ctx.fill();
+    // Highlight
+    ctx.fillStyle='rgba(255,255,255,0.6)';
+    ctx.beginPath();ctx.arc(hx-sp+1,eyeY+ey-1,1,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+sp+1,eyeY+ey-1,1,0,Math.PI*2);ctx.fill();
   }
 
-  // Tear tracks (V < 80 and G > 140 = crying about something important)
+  // Tear tracks
   if(v<80&&g>140){
-    ctx.strokeStyle='rgba(100,150,220,0.4)';ctx.lineWidth=1.5;
-    var tearPhase=time*2;
-    var tearLen=6+Math.sin(tearPhase)*3;
-    ctx.beginPath();ctx.moveTo(hx-sp,eyeY+esz+1);ctx.lineTo(hx-sp-1,eyeY+esz+tearLen);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(hx+sp,eyeY+esz+1);ctx.lineTo(hx+sp+1,eyeY+esz+tearLen);ctx.stroke();
-    ctx.strokeStyle=col;
+    ctx.strokeStyle='rgba(100,160,230,0.5)';ctx.lineWidth=2;
+    var tearLen=8+Math.sin(time*2)*3;
+    ctx.beginPath();ctx.moveTo(hx-sp,eyeY+4);ctx.lineTo(hx-sp-1,eyeY+4+tearLen);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp,eyeY+4);ctx.lineTo(hx+sp+1,eyeY+4+tearLen);ctx.stroke();
+    // Tear drops
+    ctx.fillStyle='rgba(100,160,230,0.4)';
+    var dropY=eyeY+4+tearLen+Math.sin(time*3)*2;
+    ctx.beginPath();ctx.arc(hx-sp-1,dropY,2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+sp+1,dropY,2,0,Math.PI*2);ctx.fill();
   }
 
-  // Blush (embarrassment/high arousal + positive)
+  // Blush
   if(v>140&&a>160){
-    ctx.fillStyle='rgba(220,120,120,0.15)';
-    ctx.beginPath();ctx.ellipse(hx-10,hy+2,6,3,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.ellipse(hx+10,hy+2,6,3,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(230,100,100,0.2)';
+    ctx.beginPath();ctx.ellipse(hx-12,hy+4,7,4,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(hx+12,hy+4,7,4,0,0,Math.PI*2);ctx.fill();
   }
 
-  // Mouth
-  var my=hy+8,mw=8;
-  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+  // Nose (subtle)
+  ctx.strokeStyle=skinDark;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(hx,hy+1);ctx.lineTo(hx-2,hy+5);ctx.lineTo(hx+1,hy+5);ctx.stroke();
+
+  // Mouth -- on skin, dark color
+  var my=hy+10,mw=9;
+  ctx.lineWidth=2.5;
   if(v>170){
-    // Big smile
+    // Big smile with teeth hint
+    ctx.strokeStyle='#8B4513';ctx.beginPath();
     var cv=Math.min((v-150)/80,1)*8;
-    ctx.moveTo(hx-mw,my);ctx.quadraticCurveTo(hx,my+cv+4,hx+mw,my);
+    ctx.moveTo(hx-mw,my);ctx.quadraticCurveTo(hx,my+cv+5,hx+mw,my);ctx.stroke();
+    // Teeth
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.beginPath();ctx.rect(hx-mw+3,my,mw*2-6,Math.min(cv+2,5));ctx.fill();
   } else if(v>140){
-    // Small smile
+    ctx.strokeStyle='#8B4513';ctx.beginPath();
     var cv=Math.min((v-140)/30,1)*4;
-    ctx.moveTo(hx-mw*0.7,my);ctx.quadraticCurveTo(hx,my+cv+2,hx+mw*0.7,my);
+    ctx.moveTo(hx-mw*0.7,my);ctx.quadraticCurveTo(hx,my+cv+2,hx+mw*0.7,my);ctx.stroke();
   } else if(v>120){
-    // Flat/neutral
-    ctx.moveTo(hx-mw*0.5,my);ctx.lineTo(hx+mw*0.5,my);
+    ctx.strokeStyle='#8B4513';ctx.beginPath();
+    ctx.moveTo(hx-mw*0.4,my);ctx.lineTo(hx+mw*0.4,my);ctx.stroke();
   } else if(v>90){
-    // Frown
+    ctx.strokeStyle='#8B4513';ctx.beginPath();
     var cf=Math.min((120-v)/30,1)*6;
-    ctx.moveTo(hx-mw,my+3);ctx.quadraticCurveTo(hx,my-cf,hx+mw,my+3);
+    ctx.moveTo(hx-mw*0.8,my+3);ctx.quadraticCurveTo(hx,my-cf,hx+mw*0.8,my+3);ctx.stroke();
   } else if(v>60){
-    // Deeper frown
-    var cf=Math.min((90-v)/30,1)*8;
-    ctx.moveTo(hx-mw,my+4);ctx.quadraticCurveTo(hx,my-cf-2,hx+mw,my+4);
+    ctx.strokeStyle='#8B4513';ctx.beginPath();
+    var cf=Math.min((90-v)/30,1)*9;
+    ctx.moveTo(hx-mw,my+4);ctx.quadraticCurveTo(hx,my-cf-2,hx+mw,my+4);ctx.stroke();
   } else {
     // Open mouth (shock/anguish)
-    var openness=4+Math.min((60-v)/30,1)*5;
-    ctx.ellipse(hx,my+2,mw*0.6,openness,0,0,Math.PI*2);
+    ctx.fillStyle='#4a2020';
+    var openness=5+Math.min((60-v)/30,1)*6;
+    ctx.beginPath();ctx.ellipse(hx,my+3,mw*0.5,openness,0,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#8B4513';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.ellipse(hx,my+3,mw*0.5,openness,0,0,Math.PI*2);ctx.stroke();
   }
-  ctx.stroke();
 
-  // Joints and extremities
-  ctx.fillStyle=col;
-  var joints=[2,3,8,9,10];
-  for(var ji=0;ji<joints.length;ji++){ctx.beginPath();ctx.arc(pts[joints[ji]][0],pts[joints[ji]][1],2.5,0,Math.PI*2);ctx.fill()}
-  var hands=[6,7];
-  for(var hi=0;hi<hands.length;hi++){ctx.beginPath();ctx.arc(pts[hands[hi]][0],pts[hands[hi]][1],3.5,0,Math.PI*2);ctx.fill()}
-  var feet=[11,12];
-  for(var fi=0;fi<feet.length;fi++){ctx.beginPath();ctx.arc(pts[feet[fi]][0],pts[feet[fi]][1],4,0,Math.PI*2);ctx.fill()}
+  // Hands with skin
+  ctx.fillStyle=skin;ctx.strokeStyle=skinDark;ctx.lineWidth=1;
+  [6,7].forEach(function(hi){
+    ctx.beginPath();ctx.arc(pts[hi][0],pts[hi][1],5,0,Math.PI*2);ctx.fill();ctx.stroke();
+  });
+  // Feet
+  ctx.fillStyle=skinDark;
+  [11,12].forEach(function(fi){
+    ctx.beginPath();ctx.ellipse(pts[fi][0],pts[fi][1]+2,6,4,0,0,Math.PI*2);ctx.fill();
+  });
 }
 
 // --- MOOD HISTORY ---
