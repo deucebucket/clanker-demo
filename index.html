@@ -24,6 +24,13 @@ canvas{display:block}
 input[type="text"]{width:100%;padding:10px 12px;font-size:14px;font-family:inherit;background:#111;border:1px solid #333;color:#ddd;border-radius:4px;margin:6px 0}
 input:focus{outline:none;border-color:#555}
 .input-hint{font-size:10px;color:#444;text-align:center}
+.char-select{display:flex;gap:6px;margin-bottom:6px;justify-content:center}
+.char-btn{padding:4px 10px;font-size:11px;font-family:inherit;background:#111;border:1px solid #333;color:#666;border-radius:3px;cursor:pointer;transition:all 0.2s}
+.char-btn:hover{border-color:#555;color:#999}
+.char-btn.active{border-color:#888;color:#ddd;background:#1a1a1a}
+.trauma-bar{width:100%;height:4px;background:#111;border-radius:2px;margin:2px 0;overflow:hidden}
+.trauma-fill{height:100%;border-radius:2px;transition:width 1s ease}
+.relationship-label{font-size:10px;color:#444;text-align:center;min-height:14px}
 .convo-log{width:680px;max-height:180px;overflow-y:auto;margin:8px 0;padding:8px;background:#080808;border:1px solid #1a1a1a;border-radius:4px}
 .log-entry{font-size:12px;margin:3px 0;padding:3px 8px;border-radius:3px}
 .log-a{color:#5b9bd5;border-left:2px solid #2a5580}
@@ -41,20 +48,22 @@ input:focus{outline:none;border-color:#555}
 
 <div class="convo-area">
   <div class="person" id="personA">
-    <div class="person-label" style="color:#5b9bd5">Person A</div>
+    <div class="char-select" id="selectA"></div>
     <canvas id="canvasA" width="320" height="340"></canvas>
     <div class="emotion-label" id="emotionA"></div>
+    <div class="relationship-label" id="relLabel"></div>
+    <div class="trauma-bar"><div class="trauma-fill" id="traumaBar" style="width:0%;background:#444"></div></div>
     <div class="bars" id="barsA"></div>
     <input type="text" id="inputA" placeholder="A says..." autofocus>
-    <div class="input-hint">type here -- B reacts</div>
+    <div class="input-hint">type here -- right reacts</div>
   </div>
   <div class="person" id="personB">
-    <div class="person-label" style="color:#d5855b">Person B</div>
+    <div class="char-select" id="selectB"></div>
     <canvas id="canvasB" width="320" height="340"></canvas>
     <div class="emotion-label" id="emotionB"></div>
     <div class="bars" id="barsB"></div>
     <input type="text" id="inputB" placeholder="B says...">
-    <div class="input-hint">type here -- A reacts</div>
+    <div class="input-hint">type here -- left reacts</div>
   </div>
 </div>
 
@@ -237,6 +246,117 @@ function readDim(val,dim){
   if(dim==='d'){if(n>0.15)return'confident';if(n>-0.15)return'neutral';return'yielding'}
   if(dim==='g'){if(n>0.15)return'important';if(n>-0.15)return'moderate';return'minor'}
   return'';
+}
+
+// --- CHARACTERS + PERSISTENT MEMORY ---
+var CHARACTERS=[
+  {id:'boy',label:'Boy',color:'#5b9bd5'},
+  {id:'girl',label:'Girl',color:'#d5855b'},
+  {id:'friend',label:'Friend',color:'#66bb6a'},
+  {id:'parent',label:'Parent',color:'#ab47bc'},
+  {id:'stranger',label:'Stranger',color:'#78909c'},
+];
+var charA='boy',charB='girl';
+
+function relKey(a,b){return[a,b].sort().join('_')}
+
+function loadRelationship(a,b){
+  var key='clanker_rel_'+relKey(a,b);
+  var raw=localStorage.getItem(key);
+  if(!raw)return{avgV:128,avgG:128,interactions:0,deepestV:128,totalTrauma:0,lastSeen:Date.now()};
+  var rel=JSON.parse(raw);
+  // Decay trauma over time -- deep trauma decays slowly
+  var hours=(Date.now()-rel.lastSeen)/(1000*60*60);
+  if(hours>0.1&&rel.totalTrauma>0){
+    // Deep trauma (low V) decays at 0.5%/hr, surface at 3%/hr
+    var depth=Math.max(0,(128-rel.deepestV)/128); // 0=no trauma, 1=max
+    var decayRate=0.03-depth*0.025; // 3% for surface, 0.5% for deep
+    var decay=Math.pow(1-decayRate,hours);
+    rel.totalTrauma=rel.totalTrauma*decay;
+    rel.avgV=128-(128-rel.avgV)*decay;
+    if(rel.avgV>126)rel.avgV=128; // snap to neutral
+  }
+  rel.lastSeen=Date.now();
+  return rel;
+}
+
+function saveRelationship(a,b,rel){
+  rel.lastSeen=Date.now();
+  var key='clanker_rel_'+relKey(a,b);
+  localStorage.setItem(key,JSON.stringify(rel));
+}
+
+function recordInteraction(a,b,vadug){
+  var rel=loadRelationship(a,b);
+  rel.interactions++;
+  // Running average weighted toward recent
+  var w=Math.min(0.3,1/Math.max(rel.interactions,1));
+  rel.avgV=rel.avgV*(1-w)+vadug.v*w;
+  rel.avgG=rel.avgG*(1-w)+vadug.g*w;
+  // Track deepest wound
+  if(vadug.v<rel.deepestV)rel.deepestV=vadug.v;
+  // Accumulate trauma (distance below neutral, weighted by gravity)
+  if(vadug.v<128){
+    var pain=(128-vadug.v)/128;
+    var gravity=vadug.g/255;
+    rel.totalTrauma+=pain*gravity*10;
+  }
+  saveRelationship(a,b,rel);
+  return rel;
+}
+
+function getRelBaseline(a,b){
+  var rel=loadRelationship(a,b);
+  // Shift baseline toward relationship history
+  var shift=Math.min(20,(128-rel.avgV)*0.3);
+  return{
+    v:128-shift,a:128,d:128,u:0,g:Math.min(200,128+rel.totalTrauma*2)
+  };
+}
+
+function renderRelInfo(){
+  var rel=loadRelationship(charA,charB);
+  var el=document.getElementById('relLabel');
+  var tb=document.getElementById('traumaBar');
+  if(rel.interactions===0){
+    el.textContent='no history';
+    tb.style.width='0%';tb.style.background='#333';
+    return;
+  }
+  var trauma=Math.min(100,rel.totalTrauma*5);
+  var label=trauma<5?'neutral':trauma<20?'mild tension':trauma<50?'strained':trauma<80?'damaged':'traumatized';
+  el.textContent=label+' ('+rel.interactions+' interactions)';
+  el.style.color=trauma>50?'#c0392b':trauma>20?'#e67e22':'#555';
+  tb.style.width=trauma+'%';
+  tb.style.background=trauma>50?'#c0392b':trauma>20?'#e67e22':'#555';
+}
+
+function switchChar(side,charId){
+  if(side==='A')charA=charId; else charB=charId;
+  // Load relationship baseline
+  var relBase=getRelBaseline(charA,charB);
+  stateA.base=Object.assign({},relBase);stateA.tgt=Object.assign({},relBase);
+  stateB.base=Object.assign({},relBase);stateB.tgt=Object.assign({},relBase);
+  convoLog=[];
+  document.getElementById('log').innerHTML='';
+  renderCharButtons();
+  renderRelInfo();
+}
+
+function renderCharButtons(){
+  ['A','B'].forEach(function(side){
+    var el=document.getElementById('select'+side);
+    while(el.firstChild)el.removeChild(el.firstChild);
+    var active=side==='A'?charA:charB;
+    CHARACTERS.forEach(function(ch){
+      var btn=document.createElement('button');
+      btn.className='char-btn'+(ch.id===active?' active':'');
+      btn.textContent=ch.label;
+      btn.style.borderColor=ch.id===active?ch.color:'#333';
+      btn.onclick=function(){switchChar(side,ch.id)};
+      el.appendChild(btn);
+    });
+  });
 }
 
 // --- TWO-PERSON STATE ---
@@ -477,6 +597,9 @@ function submitMessage(speaker){
   if(!text)return;
   addLog(speaker,text);
   onInput(speaker);
+  // Record interaction in persistent memory
+  if(lastResult)recordInteraction(charA,charB,lastResult.vadug);
+  renderRelInfo();
   inputEl.value='';
 }
 
@@ -547,6 +670,12 @@ function frame(){
 }
 
 loadData().then(function(){
+  renderCharButtons();
+  renderRelInfo();
+  // Load relationship baseline
+  var relBase=getRelBaseline(charA,charB);
+  stateA.base=Object.assign({},relBase);stateA.cur=Object.assign({},relBase);stateA.tgt=Object.assign({},relBase);
+  stateB.base=Object.assign({},relBase);stateB.cur=Object.assign({},relBase);stateB.tgt=Object.assign({},relBase);
   var iA=document.getElementById('inputA'),iB=document.getElementById('inputB');
   iA.addEventListener('input',function(){onInput('A')});
   iB.addEventListener('input',function(){onInput('B')});
