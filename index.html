@@ -553,12 +553,29 @@ function renderChips(){
   });
 }
 
-function addLog(speaker,text){
-  convoLog.push({speaker:speaker,text:text});
+function addLog(speaker,text,result){
+  convoLog.push({speaker:speaker,text:text,vadug:result?result.vadug:null,structs:result?result.structs:[]});
   var el=document.getElementById('log');while(el.firstChild)el.removeChild(el.firstChild);
   convoLog.forEach(function(e){
-    var d=document.createElement('div');d.className='log-entry '+(e.speaker==='A'?'log-a':'log-b');
-    d.textContent=(e.speaker==='A'?'A: ':'B: ')+e.text;el.appendChild(d);
+    var row=document.createElement('div');row.className='log-entry '+(e.speaker==='A'?'log-a':'log-b');
+    // Message text
+    var msg=document.createElement('span');msg.textContent=(e.speaker==='A'?'A: ':'B: ')+e.text;
+    row.appendChild(msg);
+    // VADUG tag
+    if(e.vadug){
+      var tag=document.createElement('span');
+      tag.style.cssText='margin-left:8px;font-size:10px;opacity:0.7;';
+      var emotion=readEmotion(e.vadug.v);
+      tag.style.color=valenceColor(e.vadug.v);
+      var tagText='V='+e.vadug.v+' '+emotion;
+      // Add structure names
+      if(e.structs&&e.structs.length>0){
+        tagText+=' ['+e.structs.map(function(s){return s.pattern}).join(', ')+']';
+      }
+      tag.textContent=tagText;
+      row.appendChild(tag);
+    }
+    el.appendChild(row);
   });
   el.scrollTop=el.scrollHeight;
 }
@@ -595,10 +612,23 @@ function submitMessage(speaker){
   var inputEl=document.getElementById(speaker==='A'?'inputA':'inputB');
   var text=inputEl.value.trim();
   if(!text)return;
-  addLog(speaker,text);
-  onInput(speaker);
-  // Record interaction in persistent memory
-  if(lastResult)recordInteraction(charA,charB,lastResult.vadug);
+  // Compute VADUG first so we can tag the log entry
+  var r=computeVADUG(text);
+  addLog(speaker,text,r);
+  lastResult=r;lastSpeaker=speaker;
+  // Apply to receiver
+  var receiver=speaker==='A'?stateB:stateA;
+  var bw=0.15;
+  receiver.tgt={v:r.vadug.v*(1-bw)+receiver.base.v*bw,a:r.vadug.a*(1-bw)+receiver.base.a*bw,d:r.vadug.d*(1-bw)+receiver.base.d*bw,u:r.vadug.u,g:r.vadug.g*(1-bw)+receiver.base.g*bw};
+  var bl=0.08;
+  receiver.base.v=lerp(receiver.base.v,r.vadug.v,bl);
+  receiver.base.a=lerp(receiver.base.a,r.vadug.a,bl*0.5);
+  receiver.base.d=lerp(receiver.base.d,r.vadug.d,bl);
+  receiver.base.g=lerp(receiver.base.g,r.vadug.g,bl);
+  receiver.history.push({v:r.vadug.v,g:r.vadug.g});
+  if(receiver.history.length>15)receiver.history.shift();
+  renderStructs();renderChips();
+  recordInteraction(charA,charB,r.vadug);
   renderRelInfo();
   inputEl.value='';
 }
