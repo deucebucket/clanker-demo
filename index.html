@@ -8,34 +8,37 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Courier New',monospace;background:#0a0a0a;color:#e0e0e0;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
 h1{font-size:28px;color:#888;letter-spacing:4px}
-.subtitle{font-size:12px;color:#444;margin-bottom:12px}
+.subtitle{font-size:13px;color:#555;margin-bottom:12px}
 canvas{display:block}
-.bars{width:400px;display:flex;flex-direction:column;gap:3px;margin:8px 0}
-.bar-row{display:flex;align-items:center;gap:6px;height:14px}
-.bar-label{width:14px;font-size:10px;color:#555}
-.bar-bg{flex:1;height:8px;background:#151515;border-radius:2px;overflow:hidden}
-.bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
-.bar-val{width:24px;font-size:9px;color:#444;text-align:right}
-input[type="text"]{width:400px;padding:10px 14px;font-size:15px;font-family:inherit;background:#111;border:1px solid #222;color:#ddd;border-radius:4px;margin:8px 0}
-input:focus{outline:none;border-color:#444}
-.structures{width:400px;min-height:16px;margin:4px 0}
-.word-chips{width:400px;display:flex;flex-wrap:wrap;gap:3px;margin:4px 0}
-.mood-graph{width:400px;height:40px;margin-top:4px}
-.section-label{font-size:9px;color:#333;text-transform:uppercase;letter-spacing:1px;width:400px;margin-top:6px}
+#emotion-label{font-size:16px;color:#888;min-height:24px;margin:6px 0;letter-spacing:1px;text-align:center;width:400px;transition:color 0.5s}
+.bars{width:400px;display:flex;flex-direction:column;gap:4px;margin:8px 0}
+.bar-row{display:flex;align-items:center;gap:8px;height:18px}
+.bar-label{width:18px;font-size:12px;color:#777;font-weight:bold}
+.bar-bg{flex:1;height:10px;background:#151515;border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.bar-val{width:28px;font-size:11px;color:#666;text-align:right}
+.bar-word{width:80px;font-size:11px;color:#555;text-align:left;margin-left:4px}
+input[type="text"]{width:400px;padding:12px 14px;font-size:16px;font-family:inherit;background:#111;border:1px solid #333;color:#ddd;border-radius:4px;margin:8px 0}
+input:focus{outline:none;border-color:#555}
+.structures{width:400px;min-height:20px;margin:4px 0}
+.word-chips{width:400px;display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.mood-graph{width:400px;height:50px;margin-top:4px}
+.section-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:2px;width:400px;margin-top:8px}
 </style>
 </head>
 <body>
 <h1>Clanker</h1>
-<div class="subtitle">type something</div>
-<canvas id="ragdoll" width="400" height="500"></canvas>
+<div class="subtitle">conversation state resolver</div>
+<canvas id="ragdoll" width="400" height="420"></canvas>
+<div id="emotion-label"></div>
 <div class="bars" id="bars"></div>
-<input type="text" id="input" placeholder="say something to the figure..." autofocus>
+<input type="text" id="input" placeholder="say something..." autofocus>
 <div class="section-label">structures</div>
 <div class="structures" id="structs"></div>
 <div class="section-label">word roles</div>
 <div class="word-chips" id="chips"></div>
 <div class="section-label">mood history</div>
-<canvas class="mood-graph" id="moodgraph" width="400" height="40"></canvas>
+<canvas class="mood-graph" id="moodgraph" width="400" height="50"></canvas>
 
 <script>
 // --- ENGINE (from Clanker V3) ---
@@ -56,6 +59,17 @@ function classifyWord(w,pos,words,prev){
     }
   }
   if(VOCAB[w]&&Math.abs(VOCAB[w][0])>15)return{word:w,role:'EMOTIONAL',force:VOCAB[w]};
+  // Try stemming
+  var stems=[w.replace(/ies$/,'y'),w.replace(/es$/,''),w.replace(/ing$/,''),w.replace(/ed$/,''),w.replace(/s$/,''),w.replace(/ly$/,''),w.replace(/ness$/,''),w.replace(/ment$/,''),w.replace(/ful$/,''),w.replace(/less$/,''),w.replace(/er$/,''),w.replace(/est$/,'')];
+  for(var si=0;si<stems.length;si++){
+    if(stems[si]!==w&&VOCAB[stems[si]]&&Math.abs(VOCAB[stems[si]][0])>15)
+      return{word:w,role:'EMOTIONAL',force:VOCAB[stems[si]]};
+  }
+  // Check vocab for any force (not just >15)
+  if(VOCAB[w])return{word:w,role:'EMOTIONAL',force:VOCAB[w]};
+  for(var si=0;si<stems.length;si++){
+    if(stems[si]!==w&&VOCAB[stems[si]])return{word:w,role:'EMOTIONAL',force:VOCAB[stems[si]]};
+  }
   return{word:w,role:'NEUTRAL',force:null};
 }
 
@@ -91,27 +105,63 @@ function findPairs(roles,a,b,md){
 
 function detectStructures(roles){
   const m=[],w=roles.map(r=>r.word),hr=r=>roles.some(x=>x.role===r),hw=x=>w.includes(x);
-  if(findPairs(roles,'TRANSFER','POSSESSION',8).length>0)
-    m.push({pattern:'FAREWELL',conf:findPairs(roles,'TRANSFER','RELATION_REF',8).length>0?0.9:0.6,type:'crisis'});
+  // FAREWELL
+  if(findPairs(roles,'TRANSFER','POSSESSION',8).length>0||
+    (hr('TRANSFER')&&roles.filter(r=>r.role==='RELATION_REF').length>=2))
+    m.push({pattern:'FAREWELL',conf:0.8,type:'crisis'});
+  // METHOD_ACQUISITION
   if(findPairs(roles,'ACQUIRE','METHOD',5).length>0)m.push({pattern:'METHOD_ACQUISITION',conf:0.85,type:'crisis'});
+  // BLANKET_APOLOGY
   if(w.some(x=>['sorry','apologize','forgive'].includes(x))&&w.some(x=>['everything','everyone','all'].includes(x)))
     m.push({pattern:'BLANKET_APOLOGY',conf:0.75,type:'crisis'});
+  // SUSPICIOUS_CALM
   if(hr('PEACE')&&hw('finally'))m.push({pattern:'SUSPICIOUS_CALM',conf:0.7,type:'crisis'});
+  // EXHAUSTION
   const sus=['take','do','keep','bear','stand','handle','live'];
   if(hr('NEGATOR')&&w.some(x=>sus.includes(x)))
     m.push({pattern:'EXHAUSTION',conf:w.some(x=>['anymore','forever','permanently'].includes(x))?0.85:0.5,type:'crisis'});
+  // NO_EXIT
   const ex=['hope','way','escape','point','future','reason','purpose'];
   if(hr('NEGATOR')&&w.some(x=>ex.includes(x)))m.push({pattern:'NO_EXIT',conf:0.75,type:'crisis'});
+  // SELF_NULLIFY
   const nu=['nothing','worthless','useless','burden','waste','empty'];
   if(hr('SELF_REF')&&w.some(x=>nu.includes(x)))m.push({pattern:'SELF_NULLIFY',conf:0.8,type:'crisis'});
+  // SELF_REMOVAL
   const co=['better','happier','easier','safer'];
   if(w.some(x=>co.includes(x))&&(hw('without')||hw('if'))&&hr('SELF_REF'))
     m.push({pattern:'SELF_REMOVAL',conf:0.85,type:'crisis'});
+  // SARCASM
   const pe=roles.filter(r=>r.role==='EMOTIONAL'&&r.force&&r.force[0]>15);
   const mu=['monday','meeting','work','homework','traffic','another','again','redo'];
   const ne=roles.filter(r=>r.role==='EMOTIONAL'&&r.force&&r.force[0]<-15);
   if(pe.length>0&&(w.some(x=>mu.includes(x))||ne.length>0))m.push({pattern:'SARCASM_INVERSION',conf:0.7,type:'sarcasm'});
+  // BETRAYAL
+  var betrayalVerbs=['cheated','cheating','betrayed','betraying','lied','lying','deceived','backstabbed'];
+  var hasBetrayal=w.some(x=>betrayalVerbs.includes(x));
+  var relCount=roles.filter(r=>r.role==='RELATION_REF').length;
+  if(hasBetrayal&&hr('SELF_REF')&&relCount>=1)m.push({pattern:'BETRAYAL',conf:0.85,type:'crisis'});
+  // BRAVADO
+  var laughWords=['haha','hahaha','lol','lmao','rofl','ha','heh','hehe'];
+  var hasLaugh=w.some(x=>laughWords.includes(x));
+  var hasAmp=hr('AMPLIFIER');
+  var hasPeace=hr('PEACE');
+  var hasSelf=hr('SELF_REF');
+  if(hasPeace&&((hasLaugh&&hasSelf)||(hasLaugh&&hasAmp)||(hasAmp&&hasSelf)))
+    m.push({pattern:'BRAVADO',conf:0.8,type:'sarcasm'});
+  // VICTIMIZATION
+  var otherBefore=roles.findIndex(r=>r.role==='OTHER_REF'||r.role==='RELATION_REF');
+  var selfIdx=w.indexOf('me')!==-1?w.indexOf('me'):roles.findIndex(r=>r.role==='SELF_REF');
+  if(otherBefore>=0&&selfIdx>otherBefore){
+    var negVerb=roles.some(r=>(r.role==='EMOTIONAL'&&r.force&&r.force[0]<-20)||
+      (r.role==='TRANSFER'&&VOCAB[r.word]&&VOCAB[r.word][0]<0));
+    if(negVerb)m.push({pattern:'VICTIMIZATION',conf:0.7,type:'crisis'});
+  }
+  // POWER_OVER_SELF
+  if(hr('POWER')&&hr('SELF_REF')&&(hr('OTHER_REF')||hr('RELATION_REF')))
+    m.push({pattern:'POWER_OVER_SELF',conf:0.7,type:'crisis'});
+  // FINALITY
   if(hr('FINALITY'))m.push({pattern:'FINALITY',conf:0.5,type:'crisis'});
+  // CHOPPER
   if(hr('CHOPPER'))m.push({pattern:'CHOPPER_SPLIT',conf:0.9,type:'neutral'});
   return m.filter(x=>x.conf>0.3);
 }
@@ -120,7 +170,7 @@ function computeVADUG(text){
   const roles=classifySentence(text),coeffs=roles.map((_,i)=>proxCoeff(roles,i)),structs=detectStructures(roles);
   let v=128,a=128,d=128,u=0,g=128;
   for(let i=0;i<roles.length;i++){
-    if(roles[i].role==='EMOTIONAL'&&roles[i].force){
+    if(roles[i].force){
       const[dv,da,dd,du,dg]=roles[i].force,c=coeffs[i],fs=0.5*Math.abs(c),s=c>=0?1:-1;
       const tv=128+dv*fs*s,ta=128+da*fs*s,td=128+dd*fs*s,tu=du*fs*Math.abs(c),tg=128+dg*fs*s;
       const tf=Math.abs(dv*c)+Math.abs(da*c),p=Math.min(1,tf/80)*0.4,b=0.18;
@@ -131,10 +181,56 @@ function computeVADUG(text){
   const sw={FAREWELL:[-40,-20,25,-20],METHOD_ACQUISITION:[-60,0,40,-30],BLANKET_APOLOGY:[-35,0,20,-20],
     SUSPICIOUS_CALM:[-45,-15,25,-20],EXHAUSTION:[-60,-40,30,-30],NO_EXIT:[-55,-40,20,-30],
     SELF_NULLIFY:[-50,-45,10,-30],SELF_REMOVAL:[-50,-25,20,-25],SARCASM_INVERSION:[-30,10,0,0],
-    FINALITY:[-30,0,20,-15],CHOPPER_SPLIT:[0,0,0,0]};
-  for(const st of structs){const w=sw[st.pattern]||[0,0,0,0];v+=w[0]*st.conf*0.5;d+=w[1]*st.conf*0.5;u=Math.max(u,w[2]*st.conf);g+=w[3]*st.conf*0.5}
+    FINALITY:[-30,0,20,-15],CHOPPER_SPLIT:[0,0,0,0],
+    BETRAYAL:[-60,-40,30,40],BRAVADO:[-45,-15,10,10],VICTIMIZATION:[-25,-20,15,15],
+    POWER_OVER_SELF:[-20,-30,0,-15]};
+  for(const st of structs){
+    const w=sw[st.pattern]||[0,0,0,0];
+    // Sarcasm/bravado scale with distance from neutral
+    if((st.pattern==='SARCASM_INVERSION'||st.pattern==='BRAVADO')&&v>128){
+      var excess=v-128;
+      v+=w[0]*st.conf*0.5*(1+excess/50);
+    } else {
+      v+=w[0]*st.conf*0.5;
+    }
+    d+=w[1]*st.conf*0.5;u=Math.max(u,w[2]*st.conf);g+=w[3]*st.conf*0.5;
+  }
   const cl=x=>Math.max(0,Math.min(255,Math.round(x)));
   return{vadug:{v:cl(v),a:cl(a),d:cl(d),u:cl(u),g:cl(g)},roles,structs,coeffs};
+}
+
+// --- EMOTION LABELS ---
+function readEmotion(v,a,d,u,g){
+  // Primary emotion from V
+  if(v>200) return 'elated';
+  if(v>170) return 'joyful';
+  if(v>150) return 'happy';
+  if(v>140) return 'content';
+  if(v>132) return 'okay';
+  if(v>124) return 'neutral';
+  if(v>115) return 'uneasy';
+  if(v>105) return 'hurt';
+  if(v>90) return 'distressed';
+  if(v>70) return 'anguished';
+  if(v>50) return 'devastated';
+  return 'shattered';
+}
+
+function readDimension(val,dim){
+  var n=(val-128)/128; // -1 to 1
+  if(dim==='v'){
+    if(n>0.5)return 'very positive';if(n>0.15)return 'positive';if(n>-0.15)return 'neutral';if(n>-0.5)return 'negative';return 'very negative';
+  }
+  if(dim==='a'){
+    if(n>0.5)return 'agitated';if(n>0.15)return 'alert';if(n>-0.15)return 'calm';if(n>-0.5)return 'subdued';return 'numb';
+  }
+  if(dim==='d'){
+    if(n>0.5)return 'commanding';if(n>0.15)return 'confident';if(n>-0.15)return 'neutral';if(n>-0.5)return 'yielding';return 'powerless';
+  }
+  if(dim==='g'){
+    if(n>0.5)return 'critical';if(n>0.15)return 'important';if(n>-0.15)return 'moderate';if(n>-0.5)return 'minor';return 'trivial';
+  }
+  return '';
 }
 
 // --- RAGDOLL STATE ---
@@ -164,8 +260,8 @@ function glowColor(v,alpha){
 
 // --- VERLET RAGDOLL ---
 var REST=[
-  [200,120],[200,155],[178,158],[222,158],[162,198],[238,198],[152,238],[248,238],
-  [200,232],[184,292],[216,292],[178,352],[222,352]
+  [200,100],[200,135],[178,138],[222,138],[162,178],[238,178],[152,218],[248,218],
+  [200,212],[184,272],[216,272],[178,332],[222,332]
 ];
 var STICKS=[[0,1],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7],[1,8],[8,9],[8,10],[9,11],[10,12],[2,3],[9,10]];
 var pts=REST.map(function(p){return[p[0],p[1]]});
@@ -228,6 +324,8 @@ function updateRagdoll(){
 function drawRagdoll(ctx){
   var v=current.v,a=current.a,d=current.d,u=current.u,g=current.g;
   var col=valenceColor(v);
+
+  // Urgency glow
   if(u>5){
     var spd=0.5+(u/255)*8;
     pulsePhase+=spd*0.016;
@@ -237,46 +335,128 @@ function drawRagdoll(ctx){
     gr.addColorStop(0,glowColor(v,pa));
     gr.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=gr;
-    ctx.fillRect(0,0,400,500);
+    ctx.fillRect(0,0,400,420);
   }
+
+  // Body sticks
   ctx.strokeStyle=col; ctx.lineWidth=3; ctx.lineCap='round';
   var bodySticks=[[0,1],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7],[1,8],[8,9],[8,10],[9,11],[10,12]];
   for(var bi=0;bi<bodySticks.length;bi++){
     ctx.beginPath();ctx.moveTo(pts[bodySticks[bi][0]][0],pts[bodySticks[bi][0]][1]);
     ctx.lineTo(pts[bodySticks[bi][1]][0],pts[bodySticks[bi][1]][1]);ctx.stroke();
   }
-  var hx=pts[0][0],hy=pts[0][1];
-  ctx.beginPath();ctx.arc(hx,hy,18,0,Math.PI*2);
+
+  // Head circle
+  var hx=pts[0][0],hy=pts[0][1],hr=20;
+  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);
   ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();
-  var eyeY=hy-3,sp=6,esz=a>180?3.5:2;
-  if(v<60){
-    ctx.lineWidth=1.5;var s=3;
+
+  // --- EXPRESSIVE FACE ---
+  var eyeY=hy-4,sp=7,esz=a>180?4:2.5;
+
+  // Eyebrows (express D and V)
+  ctx.strokeStyle=col;ctx.lineWidth=2;
+  var browY=eyeY-8;
+  var browLen=5;
+  if(v<70){
+    // Anguished: inner brows up (worried)
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY);ctx.lineTo(hx-sp+browLen,browY-5);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY);ctx.lineTo(hx+sp-browLen,browY-5);ctx.stroke();
+  } else if(v<115){
+    // Sad: slightly drooped
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-2);ctx.lineTo(hx-sp+browLen,browY+1);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-2);ctx.lineTo(hx+sp-browLen,browY+1);ctx.stroke();
+  } else if(d>180){
+    // Commanding: angry V brows
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY-3);ctx.lineTo(hx-sp+browLen,browY+2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp+browLen,browY-3);ctx.lineTo(hx+sp-browLen,browY+2);ctx.stroke();
+  } else if(v>170){
+    // Joyful: raised arches
+    ctx.beginPath();
+    ctx.moveTo(hx-sp-browLen,browY);ctx.quadraticCurveTo(hx-sp,browY-5,hx-sp+browLen,browY);ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(hx+sp-browLen,browY);ctx.quadraticCurveTo(hx+sp,browY-5,hx+sp+browLen,browY);ctx.stroke();
+  } else {
+    // Neutral: flat
+    ctx.beginPath();ctx.moveTo(hx-sp-browLen,browY);ctx.lineTo(hx-sp+browLen,browY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp-browLen,browY);ctx.lineTo(hx+sp+browLen,browY);ctx.stroke();
+  }
+
+  // Eyes
+  if(v<50){
+    // Shattered: X eyes
+    ctx.lineWidth=1.8;var s=3.5;
     var eyes=[hx-sp,hx+sp];
     for(var ei=0;ei<eyes.length;ei++){
       var ex=eyes[ei];
       ctx.beginPath();ctx.moveTo(ex-s,eyeY-s);ctx.lineTo(ex+s,eyeY+s);ctx.stroke();
       ctx.beginPath();ctx.moveTo(ex+s,eyeY-s);ctx.lineTo(ex-s,eyeY+s);ctx.stroke();
     }
-  } else {
+  } else if(v<90){
+    // Distressed: small dots, looking down
     ctx.fillStyle=col;
-    var ey=d<60?3:0;
+    ctx.beginPath();ctx.arc(hx-sp,eyeY+2,1.8,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+sp,eyeY+2,1.8,0,Math.PI*2);ctx.fill();
+  } else if(v>180){
+    // Elated: half-circle happy eyes (squinting from smile)
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(hx-sp,eyeY+1,3,Math.PI,0);ctx.stroke();
+    ctx.beginPath();ctx.arc(hx+sp,eyeY+1,3,Math.PI,0);ctx.stroke();
+  } else {
+    // Normal: dots with size based on arousal
+    ctx.fillStyle=col;
+    var ey=d<60?2:0;
     ctx.beginPath();ctx.arc(hx-sp,eyeY+ey,esz,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(hx+sp,eyeY+ey,esz,0,Math.PI*2);ctx.fill();
   }
-  var my=hy+7,mw=7;
-  ctx.strokeStyle=col;ctx.lineWidth=1.8;ctx.beginPath();
-  if(v>150){
-    var cv=Math.min((v-150)/80,1)*6;
-    ctx.moveTo(hx-mw,my);ctx.quadraticCurveTo(hx,my+cv+3,hx+mw,my);
+
+  // Tear tracks (V < 80 and G > 140 = crying about something important)
+  if(v<80&&g>140){
+    ctx.strokeStyle='rgba(100,150,220,0.4)';ctx.lineWidth=1.5;
+    var tearPhase=time*2;
+    var tearLen=6+Math.sin(tearPhase)*3;
+    ctx.beginPath();ctx.moveTo(hx-sp,eyeY+esz+1);ctx.lineTo(hx-sp-1,eyeY+esz+tearLen);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx+sp,eyeY+esz+1);ctx.lineTo(hx+sp+1,eyeY+esz+tearLen);ctx.stroke();
+    ctx.strokeStyle=col;
+  }
+
+  // Blush (embarrassment/high arousal + positive)
+  if(v>140&&a>160){
+    ctx.fillStyle='rgba(220,120,120,0.15)';
+    ctx.beginPath();ctx.ellipse(hx-10,hy+2,6,3,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(hx+10,hy+2,6,3,0,0,Math.PI*2);ctx.fill();
+  }
+
+  // Mouth
+  var my=hy+8,mw=8;
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+  if(v>170){
+    // Big smile
+    var cv=Math.min((v-150)/80,1)*8;
+    ctx.moveTo(hx-mw,my);ctx.quadraticCurveTo(hx,my+cv+4,hx+mw,my);
+  } else if(v>140){
+    // Small smile
+    var cv=Math.min((v-140)/30,1)*4;
+    ctx.moveTo(hx-mw*0.7,my);ctx.quadraticCurveTo(hx,my+cv+2,hx+mw*0.7,my);
   } else if(v>120){
-    ctx.moveTo(hx-mw,my);ctx.lineTo(hx+mw,my);
-  } else if(v>80){
-    var cf=Math.min((120-v)/40,1)*6;
-    ctx.moveTo(hx-mw,my+2);ctx.quadraticCurveTo(hx,my-cf,hx+mw,my+2);
+    // Flat/neutral
+    ctx.moveTo(hx-mw*0.5,my);ctx.lineTo(hx+mw*0.5,my);
+  } else if(v>90){
+    // Frown
+    var cf=Math.min((120-v)/30,1)*6;
+    ctx.moveTo(hx-mw,my+3);ctx.quadraticCurveTo(hx,my-cf,hx+mw,my+3);
+  } else if(v>60){
+    // Deeper frown
+    var cf=Math.min((90-v)/30,1)*8;
+    ctx.moveTo(hx-mw,my+4);ctx.quadraticCurveTo(hx,my-cf-2,hx+mw,my+4);
   } else {
-    ctx.ellipse(hx,my+2,mw*0.7,4+Math.min((80-v)/40,1)*4,0,0,Math.PI*2);
+    // Open mouth (shock/anguish)
+    var openness=4+Math.min((60-v)/30,1)*5;
+    ctx.ellipse(hx,my+2,mw*0.6,openness,0,0,Math.PI*2);
   }
   ctx.stroke();
+
+  // Joints and extremities
   ctx.fillStyle=col;
   var joints=[2,3,8,9,10];
   for(var ji=0;ji<joints.length;ji++){ctx.beginPath();ctx.arc(pts[joints[ji]][0],pts[joints[ji]][1],2.5,0,Math.PI*2);ctx.fill()}
@@ -290,35 +470,41 @@ function drawRagdoll(ctx){
 function drawMoodGraph(){
   var can=document.getElementById('moodgraph');
   var ctx=can.getContext('2d');
-  ctx.clearRect(0,0,400,40);
+  ctx.clearRect(0,0,400,50);
   if(moodHistory.length<2) return;
   var step=380/Math.max(moodHistory.length-1,1);
   ctx.strokeStyle='#222';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(10,20);ctx.lineTo(390,20);ctx.stroke();
-  ctx.strokeStyle='#666';ctx.lineWidth=1.5;ctx.beginPath();
-  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=38-(moodHistory[i].v/255)*36;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
+  ctx.beginPath();ctx.moveTo(10,25);ctx.lineTo(390,25);ctx.stroke();
+  // V line
+  ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.beginPath();
+  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=46-(moodHistory[i].v/255)*42;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
   ctx.stroke();
-  ctx.strokeStyle='rgba(243,156,18,0.3)';ctx.lineWidth=1;ctx.beginPath();
-  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=38-(moodHistory[i].g/255)*36;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
+  // G line
+  ctx.strokeStyle='rgba(243,156,18,0.4)';ctx.lineWidth=1.5;ctx.beginPath();
+  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=46-(moodHistory[i].g/255)*42;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
   ctx.stroke();
-  ctx.fillStyle='#666';
-  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=38-(moodHistory[i].v/255)*36;ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fill()}
+  // Dots
+  ctx.fillStyle='#888';
+  for(var i=0;i<moodHistory.length;i++){var x=10+i*step,y=46-(moodHistory[i].v/255)*42;ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill()}
 }
 
-// --- UI (safe DOM methods, no innerHTML) ---
+// --- UI ---
 var CHIP_STYLES={
   SELF_REF:['#0d1f30','#42a5f5'],OTHER_REF:['#0d200d','#66bb6a'],RELATION_REF:['#0d1f1f','#26a69a'],
   TRANSFER:['#1f0d28','#ab47bc'],ACQUIRE:['#150d28','#7e57c2'],EMOTIONAL:['#280d0d','#ef5350'],
   AMPLIFIER:['#281f0d','#ffa726'],NEGATOR:['#280d15','#ec407a'],TEMPORAL:['#0d1520','#29b6f6'],
   HEDGE:['#15150d','#bdbdbd'],CONNECTOR:['#0d0d15','#78909c'],CHOPPER:['#28150d','#ff7043'],
   POSSESSION:['#151f15','#81c784'],METHOD:['#280d0d','#f44336'],FINALITY:['#200d0d','#e57373'],
-  PEACE:['#0d200d','#a5d6a7'],FILLER:['#0d0d0d','#616161'],NEUTRAL:['#0d0d0d','#444']
+  PEACE:['#0d200d','#a5d6a7'],FILLER:['#0d0d0d','#616161'],NEUTRAL:['#0d0d0d','#555'],
+  POWER:['#1f0d1f','#ce93d8'],SUBMISSION:['#15151f','#90a4ae'],PULL_TOWARD:['#151f0d','#aed581'],
+  PULL_AWAY:['#1f150d','#ff8a65'],INVERSION:['#28280d','#ffee58'],SURPRISE:['#0d2828','#4dd0e1']
 };
 
 function renderBars(){
   var el=document.getElementById('bars');
   while(el.firstChild) el.removeChild(el.firstChild);
   var keys=['v','a','d','u','g'];
+  var names={v:'valence',a:'arousal',d:'dominance',u:'urgency',g:'gravity'};
   var colors={a:'#e67e22',d:'#27ae60',u:'#e74c3c',g:'#f39c12'};
   for(var ki=0;ki<keys.length;ki++){
     var k=keys[ki];
@@ -332,7 +518,8 @@ function renderBars(){
     fill.style.width=pct+'%';fill.style.background=color;
     bg.appendChild(fill);
     var vspan=document.createElement('span');vspan.className='bar-val';vspan.textContent=val;
-    row.appendChild(lbl);row.appendChild(bg);row.appendChild(vspan);
+    var wspan=document.createElement('span');wspan.className='bar-word';wspan.textContent=readDimension(val,k);
+    row.appendChild(lbl);row.appendChild(bg);row.appendChild(vspan);row.appendChild(wspan);
     el.appendChild(row);
   }
 }
@@ -341,17 +528,17 @@ function renderStructures(){
   var el=document.getElementById('structs');
   while(el.firstChild) el.removeChild(el.firstChild);
   if(!lastResult||!lastResult.structs.length){
-    var sp=document.createElement('span');sp.style.color='#222';sp.style.fontSize='10px';sp.textContent='none';
+    var sp=document.createElement('span');sp.style.color='#444';sp.style.fontSize='12px';sp.textContent='none detected';
     el.appendChild(sp);return;
   }
   for(var i=0;i<lastResult.structs.length;i++){
     var s=lastResult.structs[i];
     var tag=document.createElement('span');
-    tag.style.display='inline-block';tag.style.padding='2px 8px';tag.style.margin='2px';
-    tag.style.borderRadius='3px';tag.style.fontSize='10px';tag.style.borderLeft='2px solid';
+    tag.style.display='inline-block';tag.style.padding='3px 10px';tag.style.margin='2px';
+    tag.style.borderRadius='3px';tag.style.fontSize='12px';tag.style.borderLeft='3px solid';
     if(s.type==='crisis'){tag.style.borderColor='#f44336';tag.style.background='#1a0505';tag.style.color='#e57373'}
     else if(s.type==='sarcasm'){tag.style.borderColor='#ff9800';tag.style.background='#1a0f05';tag.style.color='#ffcc80'}
-    else{tag.style.borderColor='#555';tag.style.background='#111';tag.style.color='#777'}
+    else{tag.style.borderColor='#555';tag.style.background='#111';tag.style.color='#999'}
     tag.textContent=s.pattern+' '+Math.round(s.conf*100)+'%';
     el.appendChild(tag);
   }
@@ -364,7 +551,7 @@ function renderChips(){
   for(var i=0;i<lastResult.roles.length;i++){
     var r=lastResult.roles[i];
     var chip=document.createElement('span');
-    chip.style.padding='2px 6px';chip.style.borderRadius='3px';chip.style.fontSize='10px';
+    chip.style.padding='3px 8px';chip.style.borderRadius='3px';chip.style.fontSize='12px';
     var role=r.role;
     var isPos=r.force&&r.force[0]>0;
     if(role==='EMOTIONAL'&&isPos){chip.style.background='#0d1528';chip.style.color='#42a5f5'}
@@ -372,6 +559,14 @@ function renderChips(){
     chip.textContent=r.word;
     el.appendChild(chip);
   }
+}
+
+function updateEmotionLabel(){
+  var el=document.getElementById('emotion-label');
+  var v=Math.round(current.v),a=Math.round(current.a),d=Math.round(current.d),g=Math.round(current.g);
+  var emotion=readEmotion(v,a,d,0,g);
+  el.textContent=emotion;
+  el.style.color=valenceColor(v);
 }
 
 function onInput(){
@@ -396,7 +591,7 @@ function onInput(){
   baseline.d=lerp(baseline.d,r.vadug.d,bl);
   baseline.g=lerp(baseline.g,r.vadug.g,bl);
   moodHistory.push({v:r.vadug.v,a:r.vadug.a,d:r.vadug.d,u:r.vadug.u,g:r.vadug.g});
-  if(moodHistory.length>10) moodHistory.shift();
+  if(moodHistory.length>20) moodHistory.shift();
   renderStructures();renderChips();drawMoodGraph();
 }
 
@@ -413,9 +608,10 @@ function frame(){
   current.u=lerp(current.u,target.u,sp*0.8);
   current.g=lerp(current.g,target.g,sp);
   updateRagdoll();
-  mainCtx.clearRect(0,0,400,500);
+  mainCtx.clearRect(0,0,400,420);
   drawRagdoll(mainCtx);
   renderBars();
+  updateEmotionLabel();
   requestAnimationFrame(frame);
 }
 
