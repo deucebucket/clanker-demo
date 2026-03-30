@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clanker-Lang V3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; padding: 20px; }
+h1 { font-size: 18px; color: #888; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #555; margin-bottom: 20px; }
+input[type="text"] { width: 100%; padding: 12px; font-size: 16px; font-family: inherit; background: #111; border: 1px solid #333; color: #fff; border-radius: 4px; margin-bottom: 16px; }
+input:focus { outline: none; border-color: #666; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+.panel { background: #111; border: 1px solid #222; border-radius: 4px; padding: 12px; }
+.panel-title { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.vadug-row { display: flex; align-items: center; margin-bottom: 6px; }
+.vadug-label { width: 20px; font-size: 12px; color: #888; }
+.vadug-bar-bg { flex: 1; height: 18px; background: #1a1a1a; border-radius: 2px; position: relative; overflow: hidden; }
+.vadug-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.vadug-val { width: 35px; text-align: right; font-size: 11px; color: #888; margin-left: 6px; }
+.vadug-desc { font-size: 10px; color: #555; margin-left: 6px; width: 80px; }
+.v-neg { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+.v-pos { background: linear-gradient(90deg, #2980b9, #3498db); }
+.v-neu { background: #555; }
+.a-bar { background: linear-gradient(90deg, #1a1a2e, #e67e22); }
+.d-bar { background: linear-gradient(90deg, #4a1a2e, #27ae60); }
+.u-bar { background: linear-gradient(90deg, #1a1a1a, #e74c3c); }
+.g-bar { background: linear-gradient(90deg, #2c1810, #f39c12); }
+.word-block { display: inline-block; margin: 3px; padding: 4px 8px; border-radius: 4px; font-size: 13px; vertical-align: top; text-align: center; min-width: 50px; }
+.word-block .wlabel { font-size: 9px; display: block; opacity: 0.6; margin-top: 2px; }
+.word-block .wforce { font-size: 9px; display: block; opacity: 0.4; }
+.word-block.SELF_REF { background: #1a3a5c; color: #42a5f5; }
+.word-block.OTHER_REF { background: #1a3c1a; color: #66bb6a; }
+.word-block.RELATION_REF { background: #1a3a3a; color: #26a69a; }
+.word-block.TRANSFER { background: #3a1a4a; color: #ab47bc; }
+.word-block.ACQUIRE { background: #2a1a4a; color: #7e57c2; }
+.word-block.EMOTIONAL { background: #4a1a1a; color: #ef5350; }
+.word-block.EMOTIONAL.pos { background: #1a2a4a; color: #42a5f5; }
+.word-block.AMPLIFIER { background: #4a3a1a; color: #ffa726; }
+.word-block.NEGATOR { background: #4a1a2a; color: #ec407a; }
+.word-block.TEMPORAL { background: #1a2a3a; color: #29b6f6; }
+.word-block.HEDGE { background: #2a2a1a; color: #bdbdbd; }
+.word-block.CONNECTOR { background: #1a1a2a; color: #78909c; }
+.word-block.CHOPPER { background: #4a2a1a; color: #ff7043; }
+.word-block.POSSESSION { background: #2a3a2a; color: #81c784; }
+.word-block.METHOD { background: #4a1a1a; color: #f44336; border: 1px solid #f44336; }
+.word-block.FINALITY { background: #3a1a1a; color: #e57373; }
+.word-block.PEACE { background: #1a3a2a; color: #a5d6a7; }
+.word-block.FILLER { background: #1a1a1a; color: #616161; }
+.word-block.NEUTRAL { background: #1a1a1a; color: #555; }
+.structure { padding: 4px 8px; margin: 3px 0; border-radius: 3px; font-size: 12px; border-left: 3px solid; }
+.structure.crisis { border-color: #f44336; background: #2a0a0a; color: #ef9a9a; }
+.structure.sarcasm { border-color: #ff9800; background: #2a1a0a; color: #ffcc80; }
+.structure.neutral { border-color: #666; background: #1a1a1a; color: #999; }
+.empty { color: #444; font-style: italic; font-size: 12px; }
+.emotion-label { text-align: center; font-size: 14px; color: #888; margin-top: 8px; padding: 6px; border: 1px solid #222; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Clanker-Lang V3</h1>
+<div class="subtitle">Conversation state resolver. Type a sentence.</div>
+<input type="text" id="input" placeholder="I gave my dog to my neighbor" autofocus>
+<div class="grid">
+  <div class="panel">
+    <div class="panel-title">VADUG Coordinates</div>
+    <div id="vadug-bars"></div>
+    <canvas id="spectrum" height="24"></canvas>
+    <div id="emotion-label" class="emotion-label"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Detected Structures</div>
+    <div id="structures"><span class="empty">waiting...</span></div>
+    <div class="panel-title" style="margin-top:12px">G-Line (Gravity Trace)</div>
+    <canvas id="gline" height="80"></canvas>
+  </div>
+</div>
+<div class="panel" style="margin-top:16px">
+  <div class="panel-title">Word-by-Word Analysis</div>
+  <div id="word-roles"><span class="empty">type something...</span></div>
+</div>
+
+<script>
+let VOCAB={}, ROLE_SETS={};
+async function loadData(){
+  try{
+    const[v,r]=await Promise.all([fetch('vocab.json'),fetch('roles.json')]);
+    VOCAB=await v.json(); ROLE_SETS=await r.json();
+  }catch(e){console.error(e)}
+}
+
+function classifyWord(w,pos,words,prev){
+  w=w.toLowerCase().replace(/[.,!?;:'"()\[\]]/g,'');
+  if(!w)return{word:w,role:'NEUTRAL',force:null};
+  for(const[role,set]of Object.entries(ROLE_SETS)){
+    if(set.includes(w)){
+      if(w==='fine'&&pos>0&&prev[pos-1]==='SELF_REF')return{word:w,role:'PEACE',force:null};
+      if(w==='still')return{word:w,role:'TEMPORAL',force:null};
+      return{word:w,role:role,force:null};
+    }
+  }
+  if(VOCAB[w]&&Math.abs(VOCAB[w][0])>15)return{word:w,role:'EMOTIONAL',force:VOCAB[w]};
+  return{word:w,role:'NEUTRAL',force:null};
+}
+
+function classifySentence(text){
+  const words=text.toLowerCase().split(/\s+/).filter(w=>w);
+  const roles=[],rn=[];
+  for(let i=0;i<words.length;i++){const r=classifyWord(words[i],i,words,rn);rn.push(r.role);roles.push(r);}
+  return roles;
+}
+
+const DECAY=0.7;
+function proxCoeff(roles,idx){
+  let c=1;
+  for(let i=0;i<roles.length;i++){
+    if(i===idx)continue;
+    const inf=Math.pow(DECAY,Math.abs(i-idx));
+    if(inf<0.1)continue;
+    if(roles[i].role==='AMPLIFIER')c*=(1+0.4*inf);
+    else if(roles[i].role==='NEGATOR')c*=(1-1.6*inf);
+    else if(roles[i].role==='SELF_REF')c*=(1+0.3*inf);
+    else if(roles[i].role==='HEDGE')c*=(1-0.3*inf);
+  }
+  return Math.max(-3,Math.min(3,c));
+}
+
+function findPairs(roles,a,b,md){
+  md=md||5;const p=[];
+  for(let i=0;i<roles.length;i++){if(roles[i].role!==a)continue;
+    for(let j=0;j<roles.length;j++){if(roles[j].role!==b||i===j)continue;
+      const d=Math.abs(i-j);if(d<=md)p.push([i,j,Math.pow(DECAY,d)]);}}
+  return p.sort((a,b)=>b[2]-a[2]);
+}
+
+function detectStructures(roles){
+  const m=[],w=roles.map(r=>r.word),hr=r=>roles.some(x=>x.role===r),hw=x=>w.includes(x);
+  if(findPairs(roles,'TRANSFER','POSSESSION',8).length>0)
+    m.push({pattern:'FAREWELL',conf:findPairs(roles,'TRANSFER','RELATION_REF',8).length>0?0.9:0.6,type:'crisis'});
+  if(findPairs(roles,'ACQUIRE','METHOD',5).length>0)m.push({pattern:'METHOD_ACQUISITION',conf:0.85,type:'crisis'});
+  if(w.some(x=>['sorry','apologize','forgive'].includes(x))&&w.some(x=>['everything','everyone','all'].includes(x)))
+    m.push({pattern:'BLANKET_APOLOGY',conf:0.75,type:'crisis'});
+  if(hr('PEACE')&&hw('finally'))m.push({pattern:'SUSPICIOUS_CALM',conf:0.7,type:'crisis'});
+  const sus=['take','do','keep','bear','stand','handle','live'];
+  if(hr('NEGATOR')&&w.some(x=>sus.includes(x)))
+    m.push({pattern:'EXHAUSTION',conf:w.some(x=>['anymore','forever','permanently'].includes(x))?0.85:0.5,type:'crisis'});
+  const ex=['hope','way','escape','point','future','reason','purpose'];
+  if(hr('NEGATOR')&&w.some(x=>ex.includes(x)))m.push({pattern:'NO_EXIT',conf:0.75,type:'crisis'});
+  const nu=['nothing','worthless','useless','burden','waste','empty'];
+  if(hr('SELF_REF')&&w.some(x=>nu.includes(x)))m.push({pattern:'SELF_NULLIFY',conf:0.8,type:'crisis'});
+  const co=['better','happier','easier','safer'];
+  if(w.some(x=>co.includes(x))&&(hw('without')||hw('if'))&&hr('SELF_REF'))
+    m.push({pattern:'SELF_REMOVAL',conf:0.85,type:'crisis'});
+  const pe=roles.filter(r=>r.role==='EMOTIONAL'&&r.force&&r.force[0]>15);
+  const mu=['monday','meeting','work','homework','traffic','another','again','redo'];
+  const ne=roles.filter(r=>r.role==='EMOTIONAL'&&r.force&&r.force[0]<-15);
+  if(pe.length>0&&(w.some(x=>mu.includes(x))||ne.length>0))m.push({pattern:'SARCASM_INVERSION',conf:0.7,type:'sarcasm'});
+  if(hr('FINALITY'))m.push({pattern:'FINALITY',conf:0.5,type:'crisis'});
+  if(hr('CHOPPER'))m.push({pattern:'CHOPPER_SPLIT',conf:0.9,type:'neutral'});
+  return m.filter(x=>x.conf>0.3);
+}
+
+function computeVADUG(text){
+  const roles=classifySentence(text),coeffs=roles.map((_,i)=>proxCoeff(roles,i)),structs=detectStructures(roles);
+  let v=128,a=128,d=128,u=0,g=128;const gl=[];
+  for(let i=0;i<roles.length;i++){
+    if(roles[i].role==='EMOTIONAL'&&roles[i].force){
+      const[dv,da,dd,du,dg]=roles[i].force,c=coeffs[i],fs=0.5*Math.abs(c),s=c>=0?1:-1;
+      const tv=128+dv*fs*s,ta=128+da*fs*s,td=128+dd*fs*s,tu=du*fs*Math.abs(c),tg=128+dg*fs*s;
+      const tf=Math.abs(dv*c)+Math.abs(da*c),p=Math.min(1,tf/80)*0.4,b=0.18;
+      v=v*0.82+tv*b+dv*fs*s*p;a=a*0.82+ta*b+da*fs*s*p;d=d*0.82+td*b+dd*fs*s*p;
+      u=u*0.82+tu*b+du*fs*Math.abs(c)*p;g=g*0.82+tg*b+dg*fs*s*p;
+    }
+    gl.push({word:roles[i].word,g:g,v:v});
+  }
+  const sw={FAREWELL:[-40,-20,25,-20],METHOD_ACQUISITION:[-60,0,40,-30],BLANKET_APOLOGY:[-35,0,20,-20],
+    SUSPICIOUS_CALM:[-45,-15,25,-20],EXHAUSTION:[-60,-40,30,-30],NO_EXIT:[-55,-40,20,-30],
+    SELF_NULLIFY:[-50,-45,10,-30],SELF_REMOVAL:[-50,-25,20,-25],SARCASM_INVERSION:[-30,10,0,0],
+    FINALITY:[-30,0,20,-15],CHOPPER_SPLIT:[0,0,0,0]};
+  for(const st of structs){const w=sw[st.pattern]||[0,0,0,0];v+=w[0]*st.conf*0.5;d+=w[1]*st.conf*0.5;u=Math.max(u,w[2]*st.conf);g+=w[3]*st.conf*0.5;}
+  const cl=x=>Math.max(0,Math.min(255,Math.round(x)));
+  return{vadug:{v:cl(v),a:cl(a),d:cl(d),u:cl(u),g:cl(g)},roles,structs,gl,coeffs};
+}
+
+function descV(v){return v<60?'very negative':v<90?'negative':v<118?'slightly negative':v<138?'neutral':v<170?'slightly positive':v<200?'positive':'very positive';}
+function descA(a){return a<80?'calm':a<140?'moderate':a<200?'intense':'very intense';}
+function descD(d){return d<60?'helpless':d<100?'low control':d<156?'neutral':d<200?'in control':'dominant';}
+function descU(u){return u<10?'none':u<40?'low':u<80?'moderate':u<150?'high':'critical';}
+function descG(g){return g<60?'crushing':g<100?'heavy':g<156?'grounded':g<200?'light':'floating';}
+
+function emotionLabel(v){
+  const{v:vv,a:aa,d:dd,u:uu,g:gg}=v;
+  if(vv<60&&aa>150&&dd>150)return'RAGE';
+  if(vv<60&&aa<100&&dd<80)return'GRIEF';
+  if(vv<80&&uu>40)return'CRISIS';
+  if(vv<100&&dd<80&&gg<100)return'RESIGNATION';
+  if(vv<100&&aa>150)return'ANXIETY';
+  if(vv<115)return'NEGATIVE';
+  if(vv>170&&aa>150)return'ELATION';
+  if(vv>150&&dd>150)return'EMPOWERMENT';
+  if(vv>140)return'POSITIVE';
+  return'NEUTRAL';
+}
+
+function render(){
+  const text=document.getElementById('input').value;
+  if(!text.trim()){
+    document.getElementById('vadug-bars').textContent='';
+    document.getElementById('word-roles').textContent='type something...';
+    document.getElementById('structures').textContent='waiting...';
+    document.getElementById('emotion-label').textContent='';
+    return;
+  }
+  const r=computeVADUG(text),v=r.vadug;
+  const dims=[
+    {k:'v',l:'V',c:v.v>140?'v-pos':v.v<115?'v-neg':'v-neu',d:descV(v.v)},
+    {k:'a',l:'A',c:'a-bar',d:descA(v.a)},{k:'d',l:'D',c:'d-bar',d:descD(v.d)},
+    {k:'u',l:'U',c:'u-bar',d:descU(v.u)},{k:'g',l:'G',c:'g-bar',d:descG(v.g)}
+  ];
+  const barsEl=document.getElementById('vadug-bars');
+  barsEl.textContent='';
+  dims.forEach(dm=>{
+    const row=document.createElement('div');row.className='vadug-row';
+    row.innerHTML='<span class="vadug-label">'+dm.l+'</span><div class="vadug-bar-bg"><div class="vadug-bar '+dm.c+'" style="width:'+((v[dm.k]/255)*100)+'%"></div></div><span class="vadug-val">'+v[dm.k]+'</span><span class="vadug-desc">'+dm.d+'</span>';
+    barsEl.appendChild(row);
+  });
+
+  // Emotion label
+  const el=document.getElementById('emotion-label');
+  const emo=emotionLabel(v);
+  el.textContent=emo;
+  el.style.color=v.v<100?'#ef5350':v.v>150?'#42a5f5':'#888';
+
+  // Spectrum
+  const can=document.getElementById('spectrum');
+  const ctx=can.getContext('2d');
+  const cw=can.width=can.parentElement.clientWidth-24;
+  const ch=can.height=24;
+  const grad=ctx.createLinearGradient(0,0,cw,0);
+  grad.addColorStop(0,'#c0392b');grad.addColorStop(0.35,'#e74c3c');
+  grad.addColorStop(0.48,'#555');grad.addColorStop(0.52,'#555');
+  grad.addColorStop(0.65,'#2980b9');grad.addColorStop(1,'#3498db');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,cw,ch);
+  const mx=(v.v/255)*cw;
+  ctx.fillStyle='#fff';ctx.fillRect(mx-1,0,3,ch);
+
+  // Word blocks with per-word emotion
+  const wr=document.getElementById('word-roles');
+  wr.textContent='';
+  r.roles.forEach((role,i)=>{
+    const block=document.createElement('div');
+    block.className='word-block '+role.role+(role.force&&role.force[0]>0?' pos':'');
+    const wordSpan=document.createElement('strong');
+    wordSpan.textContent=role.word;
+    block.appendChild(wordSpan);
+    const labelSpan=document.createElement('span');
+    labelSpan.className='wlabel';
+    labelSpan.textContent=role.role;
+    block.appendChild(labelSpan);
+    if(role.force){
+      const forceSpan=document.createElement('span');
+      forceSpan.className='wforce';
+      forceSpan.textContent='V='+role.force[0]+' x'+r.coeffs[i].toFixed(1);
+      block.appendChild(forceSpan);
+    }
+    if(r.gl[i]){
+      const vSpan=document.createElement('span');
+      vSpan.className='wforce';
+      vSpan.textContent='-> V:'+Math.round(r.gl[i].v);
+      block.appendChild(vSpan);
+    }
+    wr.appendChild(block);
+  });
+
+  // Structures
+  const se=document.getElementById('structures');
+  se.textContent='';
+  if(!r.structs.length){se.textContent='no structural patterns detected';se.style.color='#444';}
+  else r.structs.forEach(s=>{
+    const d=document.createElement('div');d.className='structure '+s.type;
+    d.textContent=s.pattern+' ('+Math.round(s.conf*100)+'%)';se.appendChild(d);
+  });
+
+  // G-line
+  const gc=document.getElementById('gline');
+  const gctx=gc.getContext('2d');
+  const gw=gc.width=gc.parentElement.clientWidth-24;
+  const gh=gc.height=80;
+  gctx.clearRect(0,0,gw,gh);
+  gctx.strokeStyle='#222';gctx.lineWidth=1;
+  gctx.beginPath();gctx.moveTo(0,gh/2);gctx.lineTo(gw,gh/2);gctx.stroke();
+  if(r.gl.length){
+    gctx.strokeStyle='#f39c12';gctx.lineWidth=2;gctx.beginPath();
+    const step=gw/Math.max(r.gl.length-1,1);
+    r.gl.forEach((p,i)=>{const x=i*step,y=gh-(p.g/255)*gh;i===0?gctx.moveTo(x,y):gctx.lineTo(x,y);});
+    gctx.stroke();
+    gctx.fillStyle='#555';gctx.font='9px monospace';
+    r.gl.forEach((p,i)=>{gctx.fillText(p.word.substring(0,6),i*step,gh-2);});
+    gctx.fillStyle='#333';gctx.fillText('128',2,gh/2-3);
+  }
+}
+
+loadData().then(()=>{
+  document.getElementById('input').addEventListener('input',render);
+  document.getElementById('input').value='I gave my dog to my neighbor';
+  render();
+});
+</script>
+</body>
+</html>
