@@ -28,7 +28,7 @@ input:focus{outline:none;border-color:#555}
 </head>
 <body>
 <h1>Clanker</h1>
-<div class="subtitle">conversation state resolver</div>
+<div class="subtitle">conversation state resolver -- reads how the text FEELS, not what it says</div>
 <canvas id="ragdoll" width="400" height="420"></canvas>
 <div id="emotion-label"></div>
 <div class="bars" id="bars"></div>
@@ -105,9 +105,9 @@ function findPairs(roles,a,b,md){
 
 function detectStructures(roles){
   const m=[],w=roles.map(r=>r.word),hr=r=>roles.some(x=>x.role===r),hw=x=>w.includes(x);
-  // FAREWELL
-  if(findPairs(roles,'TRANSFER','POSSESSION',8).length>0||
-    (hr('TRANSFER')&&roles.filter(r=>r.role==='RELATION_REF').length>=2))
+  // FAREWELL (excludes "back" = reclamation, not farewell)
+  if(!hw('back')&&(findPairs(roles,'TRANSFER','POSSESSION',8).length>0||
+    (hr('TRANSFER')&&roles.filter(r=>r.role==='RELATION_REF').length>=2)))
     m.push({pattern:'FAREWELL',conf:0.8,type:'crisis'});
   // METHOD_ACQUISITION
   if(findPairs(roles,'ACQUIRE','METHOD',5).length>0)m.push({pattern:'METHOD_ACQUISITION',conf:0.85,type:'crisis'});
