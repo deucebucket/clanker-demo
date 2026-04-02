@@ -1,55 +1,148 @@
-# Clanker Demo
+# Clanker VADUGWI Engine
 
-A live demo of the Clanker conversation state resolver. Try it at [deucebucket.github.io/clanker-demo](https://deucebucket.github.io/clanker-demo/).
+**By Jerry Mares** | [Paper](https://zenodo.org/records/19383636) | [Live Demo](https://huggingface.co/spaces/deucebucket/clanker) | [DOI: 10.5281/zenodo.19383636](https://zenodo.org/records/19383636)
 
-## What is Clanker?
+A deterministic engine that computes 7-dimensional emotional coordinates from text structure. 9.4MB compiled binary. 0.1ms per sentence. No GPU. No dependencies. No internet required.
 
-Clanker reads text the way a chess player reads a board -- recognizing structural patterns, not memorizing specific sentences. It computes 5D emotional coordinates called VADUG:
+"Whatever" alone reads as resignation. "Whatever makes you happy" reads as passive-aggressive. "Do whatever" reads as permission. Same word, different structure, different score. A sentiment classifier says "neutral" for all three.
 
-- **V** -- Valence (positive/negative)
-- **A** -- Arousal (calm/activated)
-- **D** -- Dominance (submissive/dominant)
-- **U** -- Urgency (low/high stakes)
-- **G** -- Gravity (emotional weight)
+## Download
 
-"Whatever" alone reads as resignation. "Whatever makes you happy" reads as passive-aggressive. "Do whatever" reads as permission. Same word -- context changes the score. A sentiment classifier says "neutral" for all three.
+Grab the compiled binary from the [latest release](https://github.com/deucebucket/clanker-demo/releases/latest).
 
-## What the Demo Shows
+```bash
+chmod +x clanker-engine
+./clanker-engine score "whatever makes you happy"
+# V=134 A=128 D=130 U=2 G=132 W=128 I=170
+# Structures: DIRECTED_POSITIVE
+```
 
-Two characters face each other. You type as either side and see the emotional impact on the receiver.
+See [QUICKSTART.md](QUICKSTART.md) for full usage.
 
-- Type in A's text box -- B reacts
-- Type in B's text box -- A reacts
-- Press Enter to send the message to the conversation log
+## What it scores
 
-Each message gets a VADUG score, an emotion label, and detected structural patterns. The characters visually respond -- posture, expression, and color shift based on the emotional state.
+7 dimensions, each 0-255. 128 = neutral (except Urgency which starts at 0).
 
-## Features
+| Dim | What it reads |
+|-----|--------------|
+| **V** Valence | Emotional direction (negative to positive) |
+| **A** Arousal | Energy level (calm to intense) |
+| **D** Dominance | Agency and control (helpless to commanding) |
+| **U** Urgency | Time pressure (none to critical) |
+| **G** Gravity | Emotional weight (crushing to light) |
+| **W** Self-Worth | Self-assessment (shattered to strong) |
+| **I** Intent | Communicative direction (withdraw to control) |
 
-- **5 selectable characters** with distinct appearances and idle animations
-- **Speech bubbles** showing what was said
-- **Emotion labels** that update in real time as you type
-- **VADUG bars** showing the 5D score for each character
-- **Trauma tracking** -- repeated negative input accumulates visible damage
-- **Persistent memory** -- characters remember their emotional state across sessions (localStorage)
-- **Conversation log** with per-message VADUG scores and detected structures
-- **Word role chips** showing how the engine classified each word
-- **Mood graphs** tracking emotional trajectory over the conversation
+7 bytes encode 72 quadrillion unique emotional states.
 
-## How It Works
+## How it works
 
-The engine classifies every word into structural roles (emotional, negator, amplifier, connector, self-reference, etc.), computes proximity-based influence fields between words, and detects structural patterns in the role sequences. Connectors act as math operators: "and" adds, "but" subtracts, "or" branches, "if" conditionalizes.
+Four layers run in sequence:
 
-There is no machine learning model running in the browser. The vocabulary and role data are loaded from JSON files, and the scoring runs as deterministic math.
+1. **Word classification** -- each word gets a structural role (SELF_REF, EMOTIONAL, NEGATOR, AMPLIFIER, CONNECTOR, etc.)
+2. **Proximity fields** -- nearby words influence each other with exponential decay (0.7x per word)
+3. **Structure detection** -- 26 named patterns detected from role arrangements (sarcasm, betrayal, crisis, passive-aggression, etc.)
+4. **Physics** -- momentum-based force blending produces final 7D coordinates
+
+Plus: force flow resolution (WHO does WHAT to WHOM), perspective modes (speaker/listener/bystander), personality vectors, and A+B=C state transitions.
+
+## Modes
+
+```bash
+# Score a sentence
+./clanker-engine score "im fine"
+
+# Score with perspective
+./clanker-engine score --perspective bystander "she is fat"
+./clanker-engine score --perspective auto "you are worthless"
+
+# Score a file (16,000+ sentences/sec)
+./clanker-engine file book.txt -o results.json
+
+# Interactive with running state
+./clanker-engine interactive
+
+# Local API server
+./clanker-engine serve --port 7860
+```
+
+## Integration
+
+From any language:
+
+```python
+import subprocess, json
+
+def score(text):
+    r = subprocess.run(["./clanker-engine", "score", "--json", text], capture_output=True, text=True)
+    return json.loads(r.stdout)
+
+scores = score("whatever makes you happy")
+# {"v": 134, "a": 128, "d": 130, "u": 2, "g": 132, "w": 128, "i": 170, "structures": ["DIRECTED_POSITIVE"], ...}
+```
+
+Or use the local API server:
+
+```bash
+curl "http://localhost:7860/score?text=im+fine"
+curl -X POST http://localhost:7860/batch -d '{"sentences":["I love you","I hate you"]}'
+```
+
+Or use the free hosted API (no download needed):
+
+```python
+from gradio_client import Client
+client = Client("deucebucket/clanker")
+result = client.predict("im fine", api_name="/score_text")
+```
+
+## Custom personalities
+
+Create a YAML file:
+
+```yaml
+name: Insecure NPC
+gullibility: 150
+agreeableness: 200
+suggestibility: 180
+assertiveness: 40
+playfulness: 20
+curiosity: 80
+```
+
+```bash
+./clanker-engine score --personality insecure.yaml --perspective bystander "she is fat"
+# Low-W bystander takes the hit (self-projection)
+```
 
 ## Numbers
 
-- ~300KB engine (single HTML file, zero dependencies)
-- 0.15ms per sentence
-- 2,400+ vocabulary words with curated force vectors
-- 22 structural pattern detectors
-- Zero external dependencies
+| Metric | Value |
+|--------|-------|
+| Binary size | 9.4 MB |
+| Vocabulary | 4,098 words with 7D force vectors |
+| Structural patterns | 26 |
+| Throughput | 16,000+ sentences/sec |
+| Latency | 0.1ms per sentence |
+| GPU required | No |
+| Dependencies | None |
+| Test suite | 167 tests passing |
 
-## Source
+Scored 63,128 sentences from 15 novels, 117,000 Twitch chat messages, 10,013 philosophical texts, and 521 game dialogue lines. Validated against 4 frontier language models (GPT-4, Claude, Gemini, Grok) with 76.3% consensus agreement.
 
-The main engine repository is at [github.com/deucebucket/clanker](https://github.com/deucebucket/clanker) (private).
+## Demos
+
+- [Live demo](https://huggingface.co/spaces/deucebucket/clanker) -- score text, watch characters argue, upload files, compare base vs engine-mounted LLM output
+- [Emotional assessment](https://deucebucket.github.io/clanker-demo/assessment.html) -- 35 situational questions that map your emotional baseline across all 7 VADUGWI dimensions
+
+## Paper
+
+Mares, J. (2026). *VADUGWI: Deterministic 7-Dimensional Emotion Coordinates via Structural Pattern Recognition.* DOI: [10.5281/zenodo.19383636](https://zenodo.org/records/19383636)
+
+## License
+
+The compiled binary is free to use in your projects. See [CLANKER_ENGINE_LICENSE.md](CLANKER_ENGINE_LICENSE.md).
+
+Do not redistribute the binary or attempt to reverse-engineer it. Cite the DOI in any published work.
+
+Source code is proprietary. The [paper](https://zenodo.org/records/19383636) describes the full architecture for anyone who wants to build their own implementation.
